@@ -21,7 +21,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import app.grip_gains_companion.config.AppConstants
 import app.grip_gains_companion.model.ForceHistoryEntry
-import java.util.Date
 import kotlin.math.max
 import kotlin.math.min
 
@@ -42,12 +41,7 @@ fun ForceGraph(
     
     // Filter history to the selected time window
     val visibleHistory = remember(forceHistory, windowSeconds) {
-        if (windowSeconds <= 0) {
-            forceHistory
-        } else {
-            val cutoff = Date(System.currentTimeMillis() - windowSeconds * 1000L)
-            forceHistory.filter { it.timestamp.time >= cutoff.time }
-        }
+        app.grip_gains_companion.service.visibleForceHistory(forceHistory, windowSeconds)
     }
     
     // Convert to display units
@@ -133,10 +127,11 @@ fun ForceGraph(
                 // Draw force line
                 if (displayHistory.size >= 2) {
                     val path = Path()
-                    val xStep = width / (displayHistory.size - 1).coerceAtLeast(1)
+                    val firstTime = visibleHistory.first().timestamp.time
+                    val timeRange = (visibleHistory.last().timestamp.time - firstTime).coerceAtLeast(1)
                     
                     displayHistory.forEachIndexed { index, force ->
-                        val x = index * xStep
+                        val x = ((visibleHistory[index].timestamp.time - firstTime).toDouble() / timeRange * width).toFloat()
                         val y = yToCanvas(force)
                         
                         if (index == 0) {

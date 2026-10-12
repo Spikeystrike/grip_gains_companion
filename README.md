@@ -48,3 +48,5 @@ In Settings → FREZ Dyno, save your personal developer API key from developers.
 Keep the sensor unloaded during zeroing. With automatic calibration disabled, tap **Zero FREZ** after connecting. Measurements are withheld until 100 samples have established zero. The main screen shows the zeroing status and shortcut until the sensor is ready.
 
 FREZ live force numbers use a 200 ms display filter with at most 10 updates per second. Other sensors remain unsmoothed. Training, statistics and graph samples retain their original values. Rounded zero weights never display a minus sign, in either kg or lbs.
+
+The force graph follows the latest sample time, so phone-clock changes or device-clock drift do not hide incoming data. Graph updates are capped at 20 Hz. Long-session overviews retain older minimum/maximum points with bounded memory while recent samples remain detailed; training measurements are not reduced.

@@ -50,6 +50,8 @@ class ProgressorHandler {
     private val _sessionStdDev = MutableStateFlow<Double?>(null)
     val sessionStdDev: StateFlow<Double?> = _sessionStdDev.asStateFlow()
     
+    private val graphHistory = ForceGraphHistory()
+    private var previousGraphDeviceTimestamp: Long? = null
     private val _forceHistory = MutableStateFlow<List<ForceHistoryEntry>>(emptyList())
     val forceHistory: StateFlow<List<ForceHistoryEntry>> = _forceHistory.asStateFlow()
 
@@ -169,6 +171,7 @@ class ProgressorHandler {
      * Process a single force sample from the BLE device
      */
     suspend fun processSample(rawWeight: Double, timestamp: Long, isSlowScale: Boolean = false) {
+        if (!rawWeight.isFinite()) return
         lastTimestamp = timestamp
 
         // Calculate display timestamp
@@ -181,10 +184,11 @@ class ProgressorHandler {
             val firstDisplay = firstDisplayTimestamp
 
             if (firstDevice != null && firstDisplay != null) {
-                if (timestamp < firstDevice) {
+                if (timestamp < (previousGraphDeviceTimestamp ?: firstDevice)) {
                     // Device timestamp reset (e.g., after BLE reconnection) - re-anchor
+                    graphHistory.restartTimeline()
                     firstDeviceTimestamp = timestamp
-                    firstDisplayTimestamp = Date()
+                    firstDisplayTimestamp = Date(maxOf(System.currentTimeMillis(), (graphHistory.latestTimestamp ?: 0L) + 1))
                     displayTimestamp = firstDisplayTimestamp!!
                 } else {
                     val offsetMicros = timestamp - firstDevice
@@ -197,6 +201,8 @@ class ProgressorHandler {
             }
         }
         
+        previousGraphDeviceTimestamp = timestamp
+
         // Process state transition first (may establish/update baseline)
         processStateTransition(rawWeight, timestamp)
         
@@ -218,9 +224,7 @@ class ProgressorHandler {
         }
         
         // Update force history with tared value
-        val newHistory = _forceHistory.value.toMutableList()
-        newHistory.add(ForceHistoryEntry(displayTimestamp, displayWeight))
-        _forceHistory.value = newHistory
+        graphHistory.add(ForceHistoryEntry(displayTimestamp, displayWeight))?.let { _forceHistory.value = it }
     }
     
     /**
@@ -274,6 +278,8 @@ class ProgressorHandler {
         _sessionStdDev.value = null
         _forceHistory.value = emptyList()
         clearSessionRepResults()
+        graphHistory.clear()
+        previousGraphDeviceTimestamp = null
         firstDeviceTimestamp = null
         firstDisplayTimestamp = null
         lostConnectionDuringGrip = false
