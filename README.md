@@ -43,7 +43,7 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## FREZ Dyno
 
-In Settings → FREZ Dyno, save your personal developer API key from developers.frez.app and register your device there. The key is encrypted locally with Android Keystore and sent only to FREZ. Each connection needs internet to fetch the device calibration factor; measurements stream over Bluetooth.
+In Settings → FREZ Dyno, save your personal developer API key from developers.frez.app and register your device there. The key is encrypted locally with Android Keystore and sent only to FREZ. Each connection tries to refresh the device calibration factor online and saves it by serial number. When the internet cannot be reached, the last valid factor for that device is used and the status indicates offline calibration. Each Dyno must connect online once after this update before it can work offline; older versions did not save these factors. Explicit API errors (including a rejected key) and invalid responses are shown instead of silently using an old factor. Measurements stream over Bluetooth. The unloaded zero is still measured afresh; it is not cached.
 
 Keep the sensor unloaded during zeroing. With automatic calibration disabled, tap **Zero FREZ** after connecting. Measurements are withheld until 100 samples have established zero. The main screen shows the zeroing status and shortcut until the sensor is ready.
 
