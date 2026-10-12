@@ -55,6 +55,9 @@ fun MainScreen(
     val frezReady by bluetoothManager.frezReady.collectAsState()
     val frezStatus by bluetoothManager.frezStatus.collectAsState()
     val sensorType by bluetoothManager.connectedDeviceType.collectAsState()
+    LaunchedEffect(frezReady, sensorType) {
+        if (!frezReady && sensorType == app.grip_gains_companion.model.DeviceType.FREZ_DYNO) progressorHandler.resetDisplayReadout()
+    }
     val frezNeedsZero = sensorType == app.grip_gains_companion.model.DeviceType.FREZ_DYNO && !frezReady
     val connectionState by bluetoothManager.connectionState.collectAsState()
     val isConnected = connectionState == ConnectionState.Connected || simulatedForceActive
@@ -63,7 +66,7 @@ fun MainScreen(
     
     // Progressor handler state
     val state by progressorHandler.state.collectAsState()
-    val currentForce by progressorHandler.currentForce.collectAsState()
+    val displayForce by progressorHandler.displayForce.collectAsState()
     val calibrationTimeRemaining by progressorHandler.calibrationTimeRemaining.collectAsState()
     val weightMedian by progressorHandler.weightMedian.collectAsState()
     val sessionMean by progressorHandler.sessionMean.collectAsState()
@@ -106,7 +109,7 @@ fun MainScreen(
             // Status bar (only when connected)
             if (isConnected && showStatusBar && !frezNeedsZero) {
                 StatusBar(
-                    force = currentForce,
+                    force = displayForce,
                     engaged = state.isEngaged,
                     calibrating = state.isCalibrating,
                     waitingForSamples = state.isWaitingForSamples,

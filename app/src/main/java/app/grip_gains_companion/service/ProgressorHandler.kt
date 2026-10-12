@@ -26,6 +26,17 @@ class ProgressorHandler {
     
     private val _currentForce = MutableStateFlow(0.0)
     val currentForce: StateFlow<Double> = _currentForce.asStateFlow()
+    private val forceReadout = ForceReadout()
+    private val _displayForce = MutableStateFlow(0.0)
+    val displayForce: StateFlow<Double> = _displayForce.asStateFlow()
+    var displayDeviceType: app.grip_gains_companion.model.DeviceType? = null
+        set(value) {
+            if (field != value) {
+                forceReadout.reset()
+                _displayForce.value = _currentForce.value
+            }
+            field = value
+        }
     
     private val _calibrationTimeRemaining = MutableStateFlow(AppConstants.CALIBRATION_DURATION_MS)
     val calibrationTimeRemaining: StateFlow<Long> = _calibrationTimeRemaining.asStateFlow()
@@ -200,6 +211,11 @@ class ProgressorHandler {
         
         // Update published force with tared value
         _currentForce.value = displayWeight
+        if (displayDeviceType == app.grip_gains_companion.model.DeviceType.FREZ_DYNO) {
+            forceReadout.sample(displayWeight, timestamp / 1000)?.let { _displayForce.value = it }
+        } else {
+            _displayForce.value = displayWeight
+        }
         
         // Update force history with tared value
         val newHistory = _forceHistory.value.toMutableList()
@@ -241,7 +257,13 @@ class ProgressorHandler {
         }
     }
     
+    fun resetDisplayReadout() {
+        forceReadout.reset()
+        _displayForce.value = 0.0
+    }
+
     private fun resetCommonState() {
+        resetDisplayReadout()
         stopOffTargetTimer()
         _state.value = ProgressorState.WaitingForSamples
         _calibrationTimeRemaining.value = AppConstants.CALIBRATION_DURATION_MS

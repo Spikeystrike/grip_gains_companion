@@ -46,3 +46,5 @@ MIT License - see [LICENSE](LICENSE) for details.
 In Settings → FREZ Dyno, save your personal developer API key from developers.frez.app and register your device there. The key is encrypted locally with Android Keystore and sent only to FREZ. Each connection needs internet to fetch the device calibration factor; measurements stream over Bluetooth.
 
 Keep the sensor unloaded during zeroing. With automatic calibration disabled, tap **Zero FREZ** after connecting. Measurements are withheld until 100 samples have established zero. The main screen shows the zeroing status and shortcut until the sensor is ready.
+
+FREZ live force numbers use a 200 ms display filter with at most 10 updates per second. Other sensors remain unsmoothed. Training, statistics and graph samples retain their original values. Rounded zero weights never display a minus sign, in either kg or lbs.

@@ -12,8 +12,8 @@ android {
         applicationId = "app.grip_gains_auto"
         minSdk = 29
         targetSdk = 36
-        versionCode = 6
-        versionName = "6"
+        versionCode = 7
+        versionName = "7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
