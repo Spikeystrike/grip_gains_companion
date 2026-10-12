@@ -34,6 +34,7 @@ fun DeviceScannerScreen(
     showSimulatedDataOption: Boolean = false,
     onUseSimulatedData: () -> Unit = {}
 ) {
+    val frezStatus by bluetoothManager.frezStatus.collectAsState()
     val connectionState by bluetoothManager.connectionState.collectAsState()
     val discoveredDevices by bluetoothManager.discoveredDevices.collectAsState()
     val selectedDeviceType by bluetoothManager.selectedDeviceType.collectAsState()
@@ -54,11 +55,13 @@ fun DeviceScannerScreen(
         
         // Header
         HeaderSection(connectionState, selectedDeviceType) {
-            bluetoothManager.startScanning()
+            bluetoothManager.startScanning(discoveryOnly = true)
         }
         
         HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
         
+        if (frezStatus.isNotBlank()) Text(frezStatus, style = MaterialTheme.typography.bodySmall)
+
         // Device list or empty state
         Box(
             modifier = Modifier
@@ -67,7 +70,7 @@ fun DeviceScannerScreen(
         ) {
             if (discoveredDevices.isEmpty()) {
                 EmptyStateView(connectionState) {
-                    bluetoothManager.startScanning()
+                    bluetoothManager.startScanning(discoveryOnly = true)
                 }
             } else {
                 DeviceList(

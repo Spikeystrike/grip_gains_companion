@@ -37,6 +37,10 @@ fun SettingsScreen(
     simulatedForceActive: Boolean = false,
     onPreviewTargetFeedback: (TonePreviewAction, Boolean) -> Unit
 ) {
+    val frezConfigured by bluetoothManager.frezKeyConfigured.collectAsStateWithLifecycle()
+    val frezStatus by bluetoothManager.frezStatus.collectAsStateWithLifecycle()
+    val frezType by bluetoothManager.connectedDeviceType.collectAsStateWithLifecycle()
+    var frezKey by remember {mutableStateOf("")}
     val scope = rememberCoroutineScope()
     val connectionState by bluetoothManager.connectionState.collectAsStateWithLifecycle()
     val connectedDeviceName by bluetoothManager.connectedDeviceName.collectAsStateWithLifecycle()
@@ -94,6 +98,26 @@ fun SettingsScreen(
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
         ) {
+            SettingsSection(title = "FREZ Dyno") {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(verticalAlignment=Alignment.CenterVertically) {
+                        Text("FREZ Dyno",modifier=Modifier.weight(1f))
+                    }
+                    Text("Enter your personal developer API key from developers.frez.app. Your Dyno must be registered there. Internet access is required when connecting to load its calibration factor. The key stays encrypted on this phone and is sent only to FREZ.",style=MaterialTheme.typography.bodySmall)
+                    OutlinedTextField(value=frezKey,onValueChange={frezKey=it},label={Text("FREZ developer API key")},singleLine=true,
+                        visualTransformation=androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        keyboardOptions=androidx.compose.foundation.text.KeyboardOptions(keyboardType=androidx.compose.ui.text.input.KeyboardType.Password),modifier=Modifier.fillMaxWidth())
+                    Text(if(frezConfigured) "Developer key saved" else "No developer key saved",style=MaterialTheme.typography.bodySmall)
+                    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                        Button(onClick={if(bluetoothManager.saveFrezKey(frezKey)) frezKey=""},enabled=frezKey.isNotBlank()) {Text("Save FREZ key")}
+                        TextButton(onClick={bluetoothManager.saveFrezKey("");frezKey=""},enabled=frezConfigured) {Text("Remove key")}
+                    }
+                    if(frezStatus.isNotBlank()) Text(frezStatus,style=MaterialTheme.typography.bodySmall)
+                    if(frezType==app.grip_gains_companion.model.DeviceType.FREZ_DYNO) Button(onClick=bluetoothManager::zeroFrez) {Text("Zero FREZ")}
+                    Text("Keep the sensor unloaded while zeroing. With Auto calibrate on connect disabled, tap Zero FREZ after connecting. No force readings are used until zeroing finishes.",style=MaterialTheme.typography.bodySmall)
+
+                }
+            }
             // Target Weight section (only when connected)
             if (isConnected) {
                 SettingsSection(title = "Target Weight") {

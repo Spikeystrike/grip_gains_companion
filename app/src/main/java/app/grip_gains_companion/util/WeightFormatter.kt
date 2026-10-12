@@ -24,7 +24,8 @@ object WeightFormatter {
         val value = if (useLbs) weightKg * AppConstants.KG_TO_LBS else weightKg
         val unit = if (useLbs) "lbs" else "kg"
         val formatString = "%.${decimals}f"
-        val formatted = String.format(Locale.US, formatString, value)
+        val rounded = String.format(Locale.US, formatString, value)
+        val formatted = if (rounded.startsWith("-") && rounded.toDoubleOrNull() == 0.0) rounded.drop(1) else rounded
         return if (includeUnit) "$formatted $unit" else formatted
     }
     
