@@ -24,6 +24,7 @@ An unofficial Android companion app for [gripgains.ca](https://gripgains.ca/) th
   - Tindeq Progressor
   - PitchSix
   - WHC06
+  - FREZ Dyno (Developer Program key required)
 
 ## Installation
 
@@ -39,3 +40,9 @@ This is an unofficial app and is not affiliated with, endorsed by, or connected 
 ## License
 
 MIT License - see [LICENSE](LICENSE) for details.
+
+## FREZ Dyno
+
+In Settings → FREZ Dyno, save your personal developer API key from developers.frez.app and register your device there. The key is encrypted locally with Android Keystore and sent only to FREZ. Each connection needs internet to fetch the device calibration factor; measurements stream over Bluetooth.
+
+Keep the sensor unloaded during zeroing. With automatic calibration disabled, tap **Zero FREZ** after connecting. Measurements are withheld until 100 samples have established zero. The main screen shows the zeroing status and shortcut until the sensor is ready.

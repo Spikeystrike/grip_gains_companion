@@ -131,6 +131,7 @@ class MainActivity : ComponentActivity() {
         // Connect BLE samples to handler
         bluetoothManager.onForceSample = { force, timestamp, isSlowScale ->
             lifecycleScope.launch {
+                progressorHandler.enableCalibration = bluetoothManager.autoCalibrate && bluetoothManager.connectedDeviceType.value != DeviceType.FREZ_DYNO
                 progressorHandler.processSample(force, timestamp, isSlowScale)
             }
         }
@@ -178,7 +179,8 @@ class MainActivity : ComponentActivity() {
             
             // Update handler settings
             LaunchedEffect(enableCalibration) {
-                progressorHandler.enableCalibration = enableCalibration
+                bluetoothManager.autoCalibrate = enableCalibration
+                progressorHandler.enableCalibration = enableCalibration && bluetoothManager.connectedDeviceType.value != DeviceType.FREZ_DYNO
             }
             
             // Screen state
@@ -264,13 +266,14 @@ class MainActivity : ComponentActivity() {
                                     debugForceDataSource.stop()
                                     progressorHandler.reset()
                                     if (hasAllPermissions()) {
-                                        bluetoothManager.startScanning()
+                                        bluetoothManager.startScanning(discoveryOnly = true)
                                     }
                                     skippedDevice = false
                                 },
                                 onRecalibrate = {
                                     showSettings = false
-                                    progressorHandler.recalibrate()
+                                    if (bluetoothManager.connectedDeviceType.value == DeviceType.FREZ_DYNO) bluetoothManager.zeroFrez()
+                                    else progressorHandler.recalibrate()
                                     webViewBridge.refreshButtonState()
                                 },
                                 onViewLogs = {

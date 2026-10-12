@@ -52,6 +52,10 @@ fun MainScreen(
     onMutePhoneDuringGripToggle: () -> Unit,
     onUnitToggle: () -> Unit
 ) {
+    val frezReady by bluetoothManager.frezReady.collectAsState()
+    val frezStatus by bluetoothManager.frezStatus.collectAsState()
+    val sensorType by bluetoothManager.connectedDeviceType.collectAsState()
+    val frezNeedsZero = sensorType == app.grip_gains_companion.model.DeviceType.FREZ_DYNO && !frezReady
     val connectionState by bluetoothManager.connectionState.collectAsState()
     val isConnected = connectionState == ConnectionState.Connected || simulatedForceActive
     val isReconnecting = connectionState == ConnectionState.Reconnecting
@@ -93,8 +97,14 @@ fun MainScreen(
             .statusBarsPadding()
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
+            if (frezNeedsZero) {
+                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(frezStatus, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = bluetoothManager::zeroFrez) { Text("Zero FREZ") }
+                }
+            }
             // Status bar (only when connected)
-            if (isConnected && showStatusBar) {
+            if (isConnected && showStatusBar && !frezNeedsZero) {
                 StatusBar(
                     force = currentForce,
                     engaged = state.isEngaged,
