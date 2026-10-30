@@ -52,3 +52,5 @@ FREZ live force numbers use a 200 ms display filter with at most 10 updates per 
 The force graph follows the latest sample time, so phone-clock changes or device-clock drift do not hide incoming data. Graph updates are capped at 20 Hz. Long-session overviews retain older minimum/maximum points with bounded memory while recent samples remain detailed; training measurements are not reduced.
 
 Live rep mean and population deviation are updated incrementally. Weight-hold medians use incremental heaps. Active samples are kept out of UI state and copied once at rep completion, preserving all result samples without repeated full-rep copies.
+
+Sensor disconnections keep the training page and set open. Settings, logs and explicit device selection overlay the existing page instead of recreating it. Back closes the overlay. This protects the in-memory session; Android process termination and explicitly refreshing the website are not covered.

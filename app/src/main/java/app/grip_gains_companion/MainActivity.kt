@@ -8,6 +8,8 @@ import android.os.Handler
 import android.os.Looper
 import android.speech.tts.TextToSpeech
 import android.view.WindowManager
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Box
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -72,7 +74,7 @@ class MainActivity : ComponentActivity() {
     private var textToSpeech: TextToSpeech? = null
     private var textToSpeechReady = false
     private val scanResetPeriod = 180_000L // 3 minutes between scan resets
-    
+
     private val requiredPermissions: Array<String>
         get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             // Android 12+ uses new Bluetooth permissions
@@ -88,7 +90,7 @@ class MainActivity : ComponentActivity() {
                 Manifest.permission.ACCESS_FINE_LOCATION
             )
         }
-    
+
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -97,14 +99,14 @@ class MainActivity : ComponentActivity() {
             bluetoothManager.startScanning()
         }
     }
-    
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        
+
         // Keep screen on
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        
+
         // Initialize services
         bluetoothManager = BluetoothManager(this)
         progressorHandler = ProgressorHandler()
@@ -125,12 +127,12 @@ class MainActivity : ComponentActivity() {
                 textToSpeechReady = true
             }
         }
-        
+
         // Auto-detect unit preference on first launch
         lifecycleScope.launch {
             preferencesRepository.initializeUnitsIfNeeded()
         }
-        
+
         // Connect BLE samples to handler
         bluetoothManager.onForceSample = { force, timestamp, isSlowScale ->
             lifecycleScope.launch {
@@ -139,23 +141,23 @@ class MainActivity : ComponentActivity() {
                 progressorHandler.processSample(force, timestamp, isSlowScale)
             }
         }
-        
+
         // Set up event handlers
         setupEventHandlers()
-        
+
         // Check permissions and start scanning
         if (hasAllPermissions()) {
             bluetoothManager.startScanning()
         } else {
             permissionLauncher.launch(requiredPermissions)
         }
-        
+
         setContent {
             val connectionState by bluetoothManager.connectionState.collectAsState()
             val isConnected = connectionState == ConnectionState.Connected
             val isReconnecting = connectionState == ConnectionState.Reconnecting
             val simulatedForceActive by debugForceDataSource.isRunning.collectAsState()
-            
+
             // Collect preferences
             val useLbs by preferencesRepository.useLbs.collectAsState(initial = false)
             val showStatusBar by preferencesRepository.showStatusBar.collectAsState(initial = true)
@@ -180,19 +182,30 @@ class MainActivity : ComponentActivity() {
             val showEndOfSessionSummary by preferencesRepository.showEndOfSessionSummary.collectAsState(
                 initial = false
             )
-            
+
             // Update handler settings
             LaunchedEffect(enableCalibration) {
                 bluetoothManager.autoCalibrate = enableCalibration
                 progressorHandler.enableCalibration = enableCalibration && bluetoothManager.connectedDeviceType.value != DeviceType.FREZ_DYNO
             }
-            
+
             // Screen state
             var skippedDevice by remember { mutableStateOf(false) }
             var showSettings by remember { mutableStateOf(false) }
             var showLogViewer by remember { mutableStateOf(false) }
             var activeGripReconnect by remember { mutableStateOf(false) }
-            
+            var sessionStarted by remember { mutableStateOf(false) }
+            var showDevicePicker by remember { mutableStateOf(false) }
+            val sessionOpen = sessionStarted || isConnected || isReconnecting || simulatedForceActive || skippedDevice
+            LaunchedEffect(sessionOpen) { if (sessionOpen) sessionStarted = true }
+            BackHandler(showSettings || showLogViewer || (showDevicePicker && sessionOpen)) {
+                when {
+                    showLogViewer -> showLogViewer = false
+                    showSettings -> showSettings = false
+                    else -> showDevicePicker = false
+                }
+            }
+
             // Haptic feedback on connect
             LaunchedEffect(connectionState, simulatedForceActive) {
                 when (connectionState) {
@@ -226,79 +239,24 @@ class MainActivity : ComponentActivity() {
                             if (enableHaptics) {
                                 hapticManager.warning()
                             }
-                        } else if (!activeGripReconnect) {
-                            progressorHandler.reset()
                         }
                     }
-                    else -> {}
+                    else -> {
+                        if (sessionStarted && !simulatedForceActive && progressorHandler.engaged && !activeGripReconnect) {
+                            activeGripReconnect = true
+                            progressorHandler.onConnectionLost()
+                        }
+                    }
                 }
             }
-            
+
             GripGainsTheme(darkTheme = true) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    when {
-                        showLogViewer -> {
-                            LogViewerScreen(
-                                onDismiss = { showLogViewer = false }
-                            )
-                        }
-                        
-                        showSettings -> {
-                            SettingsScreen(
-                                preferencesRepository = preferencesRepository,
-                                bluetoothManager = bluetoothManager,
-                                webViewBridge = webViewBridge,
-                                onDismiss = { showSettings = false },
-                                onDisconnect = {
-                                    showSettings = false
-                                    if (simulatedForceActive) {
-                                        debugForceDataSource.stop()
-                                        progressorHandler.reset()
-                                        if (hasAllPermissions()) {
-                                            bluetoothManager.startScanning()
-                                        }
-                                    } else {
-                                        bluetoothManager.disconnect()
-                                    }
-                                    skippedDevice = false
-                                },
-                                onConnectDevice = {
-                                    showSettings = false
-                                    debugForceDataSource.stop()
-                                    progressorHandler.reset()
-                                    if (hasAllPermissions()) {
-                                        bluetoothManager.startScanning(discoveryOnly = true)
-                                    }
-                                    skippedDevice = false
-                                },
-                                onRecalibrate = {
-                                    showSettings = false
-                                    if (bluetoothManager.connectedDeviceType.value == DeviceType.FREZ_DYNO) bluetoothManager.zeroFrez()
-                                    else progressorHandler.recalibrate()
-                                    webViewBridge.refreshButtonState()
-                                },
-                                onViewLogs = {
-                                    showSettings = false
-                                    showLogViewer = true
-                                },
-                                simulatedForceActive = simulatedForceActive,
-                                onPreviewTargetFeedback = { action, spokenDirectionsEnabled ->
-                                    action.playTargetFeedbackPreview(
-                                        spokenDirectionsEnabled = spokenDirectionsEnabled,
-                                        playWarning = ToneGenerator::playWarningTone,
-                                        playHigh = ToneGenerator::playHighTone,
-                                        playLow = ToneGenerator::playLowTone,
-                                        playOnTarget = ToneGenerator::playOnTargetTone,
-                                        speak = ::speakTargetDirection
-                                    )
-                                }
-                            )
-                        }
-                        
-                        isConnected || isReconnecting || simulatedForceActive || skippedDevice -> {
+                    Box(Modifier.fillMaxSize()) {
+                        if (sessionOpen) {
                             MainScreen(
                                 bluetoothManager = bluetoothManager,
                                 progressorHandler = progressorHandler,
@@ -332,14 +290,76 @@ class MainActivity : ComponentActivity() {
                                 }
                             )
                         }
-                        
-                        else -> {
+
+                    when {
+                        showLogViewer -> {
+                            LogViewerScreen(
+                                onDismiss = { showLogViewer = false }
+                            )
+                        }
+
+                        showSettings -> {
+                            SettingsScreen(
+                                preferencesRepository = preferencesRepository,
+                                bluetoothManager = bluetoothManager,
+                                webViewBridge = webViewBridge,
+                                onDismiss = { showSettings = false },
+                                onDisconnect = {
+                                    showSettings = false
+                                    if (simulatedForceActive) {
+                                        debugForceDataSource.stop()
+                                        progressorHandler.reset()
+                                        if (hasAllPermissions()) {
+                                            bluetoothManager.startScanning()
+                                        }
+                                    } else {
+                                        bluetoothManager.disconnect()
+                                    }
+                                    skippedDevice = false
+                                },
+                                onConnectDevice = {
+                                    showSettings = false
+                                    debugForceDataSource.stop()
+                                    showDevicePicker = true
+                                    if (hasAllPermissions()) {
+                                        bluetoothManager.startScanning(discoveryOnly = true)
+                                    }
+                                    skippedDevice = false
+                                },
+                                onRecalibrate = {
+                                    showSettings = false
+                                    if (bluetoothManager.connectedDeviceType.value == DeviceType.FREZ_DYNO) bluetoothManager.zeroFrez()
+                                    else progressorHandler.recalibrate()
+                                    webViewBridge.refreshButtonState()
+                                },
+                                onViewLogs = {
+                                    showSettings = false
+                                    showLogViewer = true
+                                },
+                                simulatedForceActive = simulatedForceActive,
+                                onPreviewTargetFeedback = { action, spokenDirectionsEnabled ->
+                                    action.playTargetFeedbackPreview(
+                                        spokenDirectionsEnabled = spokenDirectionsEnabled,
+                                        playWarning = ToneGenerator::playWarningTone,
+                                        playHigh = ToneGenerator::playHighTone,
+                                        playLow = ToneGenerator::playLowTone,
+                                        playOnTarget = ToneGenerator::playOnTargetTone,
+                                        speak = ::speakTargetDirection
+                                    )
+                                }
+                            )
+                        }
+
+                        showDevicePicker || !sessionOpen -> {
+                            Surface(Modifier.fillMaxSize()) {
                             DeviceScannerScreen(
                                 bluetoothManager = bluetoothManager,
                                 onDeviceSelected = { device ->
+                                    showDevicePicker = false
                                     bluetoothManager.connect(device)
                                 },
                                 onSkipDevice = {
+                                    showDevicePicker = false
                                     skippedDevice = true
                                 },
                                 showSimulatedDataOption = debugForceDataSource.isAvailable,
@@ -347,16 +367,19 @@ class MainActivity : ComponentActivity() {
                                     bluetoothManager.stopScanning()
                                     progressorHandler.reset()
                                     debugForceDataSource.start()
+                                    showDevicePicker = false
                                     skippedDevice = false
                                 }
                             )
                         }
                     }
+                    }
+                    }
                 }
             }
         }
     }
-    
+
     /**
      * Determine if we should end the session instead of failing.
      * Returns true if grip fails before the configured threshold % of target duration.
@@ -364,11 +387,11 @@ class MainActivity : ComponentActivity() {
     private suspend fun shouldEndSessionOnEarlyFail(): Boolean {
         val enabled = preferencesRepository.enableEndSessionOnEarlyFail.first()
         if (!enabled) return false
-        
+
         val targetDuration = webViewBridge.targetDuration.value ?: return false
         val remainingTime = webViewBridge.remainingTime.value ?: return false
         if (targetDuration <= 0) return false
-        
+
         val elapsedTime = targetDuration - remainingTime
         val thresholdPercent = preferencesRepository.earlyFailThresholdPercent.first()
         val thresholdSeconds = targetDuration.toDouble() * thresholdPercent
@@ -386,7 +409,7 @@ class MainActivity : ComponentActivity() {
                 } else {
                     webViewBridge.clickFailButton()
                 }
-                
+
                 val enableHaptics = preferencesRepository.enableHaptics.first()
                 if (enableHaptics) {
                     hapticManager.warning()
@@ -409,7 +432,7 @@ class MainActivity : ComponentActivity() {
                 bluetoothManager.resetScan()
             }
         }
-        
+
         // Calibration complete
         lifecycleScope.launch {
             progressorHandler.calibrationCompleted.collect {
@@ -419,7 +442,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        
+
         // Target-weight feedback
         lifecycleScope.launch {
             progressorHandler.targetFeedbackEvents.collectLatest { event ->
@@ -433,11 +456,11 @@ class MainActivity : ComponentActivity() {
                     backOnTargetEnabled = preferencesRepository.enableBackOnTargetSound.first(),
                     spokenDirectionsEnabled = preferencesRepository.enableSpokenDirections.first()
                 )
-                
+
                 if (enableHaptics && event is TargetFeedbackEvent.OffTarget) {
                     hapticManager.warning()
                 }
-                
+
                 event.playEnabledTargetFeedback(
                     settings = soundSettings,
                     playHigh = ToneGenerator::playHighTone,
@@ -447,7 +470,7 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
-        
+
         // Button state changes
         lifecycleScope.launch {
             webViewBridge.buttonEnabled
@@ -461,7 +484,7 @@ class MainActivity : ComponentActivity() {
                 if (!visible) progressorHandler.clearSessionRepResults()
             }
         }
-        
+
         // Update handler with target weight from web
         lifecycleScope.launch {
             webViewBridge.targetWeight
@@ -515,7 +538,7 @@ class MainActivity : ComponentActivity() {
                 }
         }
     }
-    
+
     private fun hasAllPermissions(): Boolean {
         return requiredPermissions.all { permission ->
             ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
@@ -570,7 +593,7 @@ class MainActivity : ComponentActivity() {
             backgroundInactivityShutdownTimer.onEnteredBackground()
         }
     }
-    
+
     override fun onDestroy() {
         super.onDestroy()
         backgroundInactivityShutdownTimer.onEnteredForeground()

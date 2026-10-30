@@ -100,6 +100,9 @@ fun MainScreen(
             .statusBarsPadding()
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
+            if (!isConnected) {
+                Text("${connectionState.displayText} — session retained", modifier = Modifier.fillMaxWidth().padding(12.dp), style = MaterialTheme.typography.bodySmall)
+            }
             if (frezNeedsZero) {
                 Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(frezStatus, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
